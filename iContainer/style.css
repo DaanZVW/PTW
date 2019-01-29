@@ -39,6 +39,25 @@ body{
   border-bottom: 1px solid #4caf50;
 }
 
+.signuperror {
+  color: red;
+  width: 100%;
+  overflow: hidden;
+  font-size: 20px;
+  padding: 8px 0;
+  margin: 8px 0;
+  border-bottom: 1px solid #4caf50;
+}
+
+.signupsuccess {
+  width: 100%;
+  overflow: hidden;
+  font-size: 20px;
+  padding: 8px 0;
+  margin: 8px 0;
+  border-bottom: 1px solid #4caf50;
+  
+}
 .textbox i{
   width: 26px;
   float: left;
