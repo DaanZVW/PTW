@@ -9,9 +9,9 @@ mydb = mysql.connector.connect(
 )
 #locaties van de afvalbakken
 start = '/52.114971,5.068714'
-bak1 = '/52.084856,5.175886'
-bak2 = '/52.084897,5.168815'
-bak3 = '/52.081865,5.176547'
+bak1 = '/52.084856,5.175886' #Heidelberglaan
+bak2 = '/52.084897,5.168815' #Padualaan
+bak3 = '/52.081865,5.176547' #Bolognalaan
 route = [start,start]
 urlmaps = 'https://www.google.es/maps/dir'
 
