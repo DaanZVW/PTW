@@ -25,11 +25,11 @@ if b1 == 1 and bak1 not in route:
     route.insert(1, bak1)
 elif b1 == 0 and bak1 in route:
     route.remove(bak1)
-elif b2 == 1 and bak2 not in route:
+if b2 == 1 and bak2 not in route:
     route.insert(1, bak2)
 elif b2 == 0 and bak2 in route:
     route.remove(bak2)
-elif b3 == 1 and bak3 not in route:
+if b3 == 1 and bak3 not in route:
     route.insert(1, bak3)
 elif b3 == 0 and bak3 in route:
     route.remove(bak3)
