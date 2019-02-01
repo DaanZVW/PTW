@@ -1,0 +1,219 @@
+# Import Libraries
+
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import mysql.connector
+import RPi.GPIO as GPIO
+import time
+
+
+def distance(sensor, GPIOlist):
+    "'Deze functie meet de afstand, hierbij word er meegegeven welke sensor deze moet testen en op welke pin deze zit'"
+    # Zet de Trigger aan
+    GPIO.output(GPIOlist[sensor][0], True)
+
+    # Zet de Trigger na 0.01ms uit
+    time.sleep(0.00001)
+    GPIO.output(GPIOlist[sensor][0], False)
+
+    StartTime = time.time()
+    StopTime = time.time()
+
+    # Sla StartTime op
+    while GPIO.input(GPIOlist[sensor][1]) == 0:
+        StartTime = time.time()
+
+    # Sla op wanneer het signaal wordt ontvangen
+    while GPIO.input(GPIOlist[sensor][1]) == 1:
+        StopTime = time.time()
+
+    # Bereken de travel afstand
+    TimeElapsed = StopTime - StartTime
+
+    # Doe de tijd keer de snelheid van het geluid (34300 cm/s)
+    # Deel door 2 want het is heen en weer
+    distance = (TimeElapsed * 34300) / 2
+
+    # Return de afstand * de afwijkinsfactor
+    return distance * GPIOlist[sensor][2]
+
+
+def correct(meting, inLijst):
+    "'Geeft aan of de meting en inLijst variable te ver van elkaar liggen'"
+    if inLijst > meting:
+        return False
+
+    elif inLijst > meting * 0.4:
+        return None
+
+    else:
+        return True
+
+
+def calibreren(meting, inLijst, GPIOlist):
+    "'Zorgt ervoor dat elke sensor een nulmeting terug geeft en zo'"
+    print('Container Actief')
+    print('-----------------------')
+
+    # Zet calibratie naar False voor die de loop begint
+    calibratie = False
+
+    # Zet poging tot 1 en wacht tot calibratie True is voordat ie klaar is
+    poging = 1
+    while not calibratie:
+
+        # Loop de volgende code zo vaak als dat er items (dus sensoren) in GPIOLIST zitten
+        gegevens = []
+        for i in range(0, len(GPIOlist)):
+            dist = []
+            print('Calibreren van sensor {}..'.format(i + 1))
+
+            # Laat de aangegeven sensor variable meting gegevens in dist doen.
+            for j in range(0, meting):
+                dist.append(round(distance(i, GPIOlist), 1))
+                time.sleep(0.5)
+
+            # Maak een Frequentie lijst aan waar wordt gekeken hoe vaak dat gegeven voorkomt in de lijst
+            freq = []
+            for data in dist:
+                q = 0
+                for z in range(0, len(dist)):
+                    if data == dist[z]:
+                        q += 1
+                freq.append(q)
+
+            # Voeg de gemeten waarde die het vaakst voorkomt toe als deze hoger is dan variable inLijst
+            if max(freq) >= inLijst:
+                gegevens.append(dist[freq.index(max(freq))])
+
+        # Kijk of de gegevens van de meting minder groot is dan de aantal sensoren (als de modus van een van de sensoren
+        # niet hoog genoeg is dan wordt hij niet toegevoegd) en geef dan een melding als het niet is gelukt
+        if len(gegevens) != len(GPIOlist):
+            print('Calibratie {} mislukt, Opnieuw meten..'.format(poging))
+            print('-----------------------')
+            poging += 1
+
+        # Als er len(GPIOlist) aan gegevens in de lijst zit zet dan calibratie op TRUE zodat de while loop word gesloten
+        else:
+            calibratie = True
+            print('Calibratie voltooid, container actief..')
+            print('-----------------------')
+
+    # Return de nulmetingen
+    return gegevens
+
+
+def appendContainer(newvalue, field, id):
+    "'Deze functie zorgt dat er verbinding met de msql sever gelegd kan worden'"
+
+    # Een variable wordt aangemaakt voor de database connectie
+    containerDb = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        passwd="",
+        database="containers"
+    )
+
+    # De variable 'cursor' wordt aangemaakt om code te simplificeren.
+    cursor = containerDb.cursor()
+    # De SQL command line wordt in een variable gezet, daarna wordt deze uitgevoerd
+    # via de cursor en dan wordt de verandering gecommit. Zonder containerDb.commit()
+    # is er geen aanpassing !!
+    sql = "UPDATE container SET {} = '{}' WHERE ContainerID = '{}'".format(field, newvalue, id)
+    cursor.execute(sql), containerDb.commit()
+    print("Tabel Container '{}' veld '{}' is geüpdated met: '{}' ".format(id, field, newvalue))
+
+    #   #voorbeeld
+    # appendContainer(20, "Grootte", 1)
+    # Tabel Container '1' veld 'Grootte' is geüpdated met: '20'
+
+
+def volume(meting, inLijst, GPIOlist, nulmeting, meting_sec):
+    "'Deze functie geeft een percentage terug vergeleken met de nulmetingen die de calibratie heeft teruggegeven'"
+    while True:
+
+        # In principe is deze functie exact hetzelfde alleen iets anders uitgevoerd. Het verschil tussen deze functie
+        # en de calibratie functie is dat ik nu per sensor aan het kijken ben of het erbuiten valt i.p.v. dat alle
+        # sensoren worden gedaan en dan pas wordt gekeken. Daarom zal ik ook niet alles gaan uitleggen maar alleen
+        # de verschillen uitleggen wat er dan wordt gedaan.
+
+        # Hier doe ik gecalibreert juist in de forloop aanroepen en heb ik een nieuwe opnieuw variabel
+        gegevens = []
+        for i in range(0, len(GPIOlist)):
+            gecalibreert = False
+            opnieuw = 0
+
+            while not gecalibreert:
+                dist = []
+
+                for j in range(0, meting):
+                    dist.append(round(distance(i, GPIOlist), 1))
+                    time.sleep(0.5)
+
+                freq = []
+                for data in dist:
+                    q = 0
+                    for z in range(0, len(dist)):
+                        if data == dist[z]:
+                            q += 1
+
+                    freq.append(q)
+
+                # Kijk of de max frequentie hoger is dan inLijst, daarna zet ie calibreert op True en voegt de gegeven
+                # toe aan de lijst.
+                if max(freq) >= inLijst:
+                    gecalibreert = True
+                    gegevens.append(dist[freq.index(max(freq))])
+
+                # Deze kijkt of opnieuw meer is dan 5 en geeft dan een waarschuwing dat de sensor niet accuraat meet
+                else:
+                    opnieuw += 1
+                    if opnieuw >= 5:
+                        print('Sensor {} meet onbetrouwbaar, poging {}..'.format(i + 1, opnieuw))
+
+        # Logica voor de meting
+        print(gegevens)
+        print(nulmeting)
+
+        # Alle gemeten afstanden worden in een nieuwe lijst gezet waarbij de gegevens worden omgezet in procenten
+        gemeten_afstand = []
+        for i in range(0, len(gegevens)):
+            gemeten_afstand.append(round(100 - (gegevens[i] / nulmeting[i]) * 100))
+
+        # Kijkt alle gegevens in gemeten_afstand na
+        for i in range(0, len(gemeten_afstand)):
+
+            # Kijkt of de gegevens afwijken of ze tussen 100 of 0 zitten
+            if gemeten_afstand[i] < 0:
+                if gemeten_afstand[i] < -1:
+                    gemeten_afstand[i] = 0
+                    print('Sensor {} levert geen betrouwbare meting!'.format(i + 1))
+
+                else:
+                    gemeten_afstand[i] = 0
+                    print('Sensor {} meet {} cm en is nu {}% vol'.format(i + 1, gegevens[i], gemeten_afstand[i]))
+
+            else:
+                print('Sensor {} meet {} cm en is nu {}% vol'.format(i + 1, gegevens[i], gemeten_afstand[i]))
+
+        # Doet alle gemeten afstanden bij elkaar met een bepaalde formule
+        totaalafstand = gemeten_afstand[0] / 2 + ((gemeten_afstand[1] + gemeten_afstand[2]) / 2)
+
+        # Kijkt of de gegevens misschien toch hoger zijn dan 100%, dan past hij ze alsnog aan naar 100%
+        if totaalafstand > 100:
+            totaalafstand = 100
+
+        # Geeft aan hoe vol de container zit
+        print('De container is {}% vol.'.format(totaalafstand))
+
+        # stuurt naar de database hoe vol hij zit
+        appendContainer(totaalafstand, 'Grootte', 1)
+
+        # wacht meting_sec lang voor hij met een nieuwe meting begint, als er CTRL + c wordt gedrukt gaat hij gelijk
+        try:
+            time.sleep(meting_sec)
+            print('-----------------------')
+        except KeyboardInterrupt:
+            print('-----------------------')
+
+
