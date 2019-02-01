@@ -1,22 +1,20 @@
-# Libraries
+# Libraries toevoegen
 import RPi.GPIO as GPIO
-import time
+import Sensoren_Functies
 
-# GPIO Mode (BOARD / BCM)
+# GPIO mode
 GPIO.setmode(GPIO.BCM)
 
-# set GPIO Pins
-GPIO_TRIGGER1 = 16
-GPIO_TRIGGER2 = 20
-GPIO_TRIGGER3 = 21
+# Zet de GPIO pins
+GPIO_TRIGGER1 = 6
+GPIO_TRIGGER2 = 19
+GPIO_TRIGGER3 = 16
 
 GPIO_ECHO1 = 13
-GPIO_ECHO2 = 19
-GPIO_ECHO3 = 26
+GPIO_ECHO2 = 26
+GPIO_ECHO3 = 20
 
-GPIO_INFRARED = 6
-
-# set GPIO direction (IN / OUT)
+# Setup van de GPIO's
 GPIO.setup(GPIO_TRIGGER1, GPIO.OUT)
 GPIO.setup(GPIO_TRIGGER2, GPIO.OUT)
 GPIO.setup(GPIO_TRIGGER3, GPIO.OUT)
@@ -25,98 +23,37 @@ GPIO.setup(GPIO_ECHO1, GPIO.IN)
 GPIO.setup(GPIO_ECHO2, GPIO.IN)
 GPIO.setup(GPIO_ECHO3, GPIO.IN)
 
-GPIO.setup(GPIO_INFRARED, GPIO.IN)
+# Lijst aanmaken waar alle pins in zitten met calibratie factor
+GPIOlist = [[GPIO_TRIGGER1, GPIO_ECHO1, 0.969], [GPIO_TRIGGER2, GPIO_ECHO2, 0.930], [GPIO_TRIGGER3, GPIO_ECHO3, 0.956]]
 
-GPIOlist = [[GPIO_TRIGGER1, GPIO_ECHO1], [GPIO_TRIGGER2, GPIO_ECHO2], [GPIO_TRIGGER3, GPIO_ECHO3]]
+# --------------------------------------------------------------------------------------------------------------
 
+# Aantal variable toevoegen
+meting = 10     # Hoeveel metingen er wordt gedaan voor 1 meting
+inLijst = 4     # Hoe accuraat de gemeten waarde moet zijn
+meting_sec = 10 # Na hoeveel seconden een nieuwe meting wordt gestart
 
-def distance(sensor):
-    # set Trigger to HIGH
-    GPIO.output(GPIOlist[sensor][0], True)
+try:
+    # Kijk of de gebruiker de variable meting en inLijst verkeerd heeft ingesteld, zo ja wordt er hier een error gegeven
+    if Sensoren_Functies.correct(meting, inLijst) or Sensoren_Functies.correct(meting, inLijst) is None:
+        # Als de inLijst 40% van de meting zit wordt er een waarschuwing gegeven
+        if Sensoren_Functies.correct(meting, inLijst) is None:
+            print('De nu ingestelde opties hebben een gevolg op de snelheid van de container.')
+            print('Verlaag variable inLijst zodat de metingen sneller verlopen.')
 
-    # set Trigger after 0.01ms to LOW
-    time.sleep(0.00001)
-    GPIO.output(GPIOlist[sensor][0], False)
+        # Calibratie functie en de meetfunctie aanroepen met de variable
+        data = Sensoren_Functies.calibreren(meting, inLijst, GPIOlist)
+        Sensoren_Functies.volume(meting, inLijst, GPIOlist, data, meting_sec)
 
-    StartTime = time.time()
-    StopTime = time.time()
-
-    # save StartTime
-    while GPIO.input(GPIOlist[sensor][1]) == 0:
-        StartTime = time.time()
-
-    # save time of arrival
-    while GPIO.input(GPIOlist[sensor][1]) == 1:
-        StopTime = time.time()
-
-    # time difference between start and arrival
-    TimeElapsed = StopTime - StartTime
-    # multiply with the sonic speed (34300 cm/s)
-    # and divide by 2, because there and back
-    distance = (TimeElapsed * 34300) / 2
-
-    return distance
-
-
-def meten(loop):
-    disttotal = []
-
-    for j in range(0, 3):
-        i = loop + 1
-        dist = []
-
-        while i != 0:
-            dist.append(round(distance(j), 1))
-            i -= 1
-            time.sleep(0.5)
-
-        disttotal.append(dist[1:])
-        time.sleep(1)
-        print("Meting {} gedaan... ".format(j + 1))
-
-    return disttotal
-
-
-def meet_afstand(loop=10):
-    disttotal = meten(loop)
-
-    for q in range(0, 3):
-        dist = disttotal[q]
-
-        freq = []
-        for data in dist:
-            j = 0
-            for i in range(0, len(dist)):
-                if data == dist[i]:
-                    j += 1
-            freq.append(j)
-
-        print("Gemeten afstand = {0:.0f} cm".format(dist[freq.index(max(freq))]))
-        print(time.strftime("%H:%M:%S"))
-
-
-if __name__ == '__main__':
-    try:
-        wachten = 5
-
-        print('Sensoren Calibreren...')
-        time.sleep(2)
-        print('Sensoren Actief...')
-        while True:
-            if GPIO.input(GPIO_INFRARED):
-                print('Beweging Gedetecteerd...')
-                print('Meting Begint Over {} Seconden'.format(wachten))
-                time.sleep(wachten)
-                print('Meting Begonnen...')
-                meet_afstand(10)
-                time.sleep(5)
-                print('Sensoren Actief...')
-
-        # Reset by pressing CTRL + C
-    except KeyboardInterrupt:
-        print("Meting gestopt door gebruiker.")
+    # Als de inLijst hoger is de meting dan geeft het script een error en stopt het automatisch
+    else:
+        print('-----------------------')
+        print('De variable inLijst heeft een hogere waarde dan de variable meting!')
+        print('meting : {}, inLijst : {}. Zorg dat meting >= inLijst waar blijft.'.format(meting, inLijst))
         GPIO.cleanup()
 
-    except:
-        print("Er is een Error ontstaan.")
-        GPIO.cleanup()
+# Als je ergens in het script een
+except KeyboardInterrupt:
+    print('-----------------------')
+    print('Gebruiker heeft container afgesloten.')
+    GPIO.cleanup()
